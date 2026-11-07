@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-Means Lab - Visualisator & Simulator Clustering Interaktif</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js untuk grafik Inersia/WCSS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- KaTeX CSS & JS (Renderer LaTeX Inline & Display) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMath();"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .katex {
+            font-size: 1.05em !important;
+            color: inherit;
+        }
+        input[type=range] {
+            accent-color: #6366f1;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-xl shadow-lg shadow-indigo-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">K-Means Lab</h1>
+                    <p class="text-xs text-slate-400">Visualisator & Simulasi Iteratif Machine Learning</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-1 sm:space-x-2 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700/50">
+                <button onclick="switchTab('sim')" id="tab-sim" class="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 bg-indigo-600 text-white shadow-sm">
+                    🕹️ Simulator Visual
+                </button>
+                <button onclick="switchTab('theory')" id="tab-theory" class="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 text-slate-400 hover:text-white">
+                    📖 Teori & Algoritma
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+        <!-- ================= TAB 1: SIMULATOR VISUAL ================= -->
+        <section id="sec-sim" class="space-y-6">
+            
+            <!-- Dynamic Status Banner -->
+            <div class="glass-card rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-l-4 border-l-indigo-500">
+                <div class="flex items-center space-x-3">
+                    <div id="status-badge" class="px-3 py-1 bg-indigo-500/20 text-indigo-300 font-mono text-xs font-bold rounded-full border border-indigo-500/30">
+                        Iterasi: 0
+                    </div>
+                    <div>
+                        <h2 id="status-title" class="text-base font-bold text-white">Langkah 0: Inisialisasi Centroid</h2>
+                        <p id="status-desc" class="text-xs text-slate-400">Centroid awal telah ditempatkan secara acak. Klik "Langkah Selanjutnya" untuk memulai penugasan titik.</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                    <span class="text-xs text-slate-400 font-mono">WCSS (Inersia):</span>
+                    <span id="wcss-val" class="font-mono font-extrabold text-amber-400 text-sm">--</span>
+                </div>
+            </div>
+
+            <!-- Main Layout Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- Left Column: Controls (4 Cols) -->
+                <div class="lg:col-span-4 space-y-6">
+
+                    <!-- Panel Generasi Data -->
+                    <div class="glass-card rounded-2xl p-5 space-y-4">
+                        <h3 class="text-sm font-bold text-slate-200 flex items-center justify-between">
+                            <span>⚙️ 1. Pengaturan Data Sintetis</span>
+                            <span class="text-xs text-indigo-400 font-normal">2 Variabel ($X_1, X_2$)</span>
+                        </h3>
+
+                        <!-- Cluster Asli (2 - 5) -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300">Target Cluster Data ($K_{data}$):</label>
+                                <span id="val-true-k" class="font-mono font-bold text-indigo-400">3 Cluster</span>
+                            </div>
+                            <input type="range" id="input-true-k" min="2" max="5" value="3" step="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <!-- Jumlah Titik Data N -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300">Jumlah Data ($N$):</label>
+                                <span id="val-num-points" class="font-mono font-bold text-indigo-400">120 Titik</span>
+                            </div>
+                            <input type="range" id="input-num-points" min="40" max="300" value="120" step="10" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <!-- Variansi Noise Data -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300">Sebaran Data (Variansi):</label>
+                                <span id="val-spread" class="font-mono font-bold text-indigo-400">Sedang</span>
+                            </div>
+                            <input type="range" id="input-spread" min="15" max="50" value="30" step="5" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <button onclick="generateData()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl text-slate-200 transition-colors flex items-center justify-center space-x-2">
+                            <span>🎲 Acak & Generate Data Baru</span>
+                        </button>
+                    </div>
+
+
+                    <!-- Panel Pengaturan Model K-Means -->
+                    <div class="glass-card rounded-2xl p-5 space-y-4">
+                        <h3 class="text-sm font-bold text-slate-200">🤖 2. Parameter Model K-Means</h3>
+
+                        <!-- Nilai K Centroid -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300">Jumlah Centroid ($K$ Model):</label>
+                                <span id="val-model-k" class="font-mono font-bold text-pink-400">3 Centroid</span>
+                            </div>
+                            <input type="range" id="input-model-k" min="2" max="5" value="3" step="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <!-- Metode Inisialisasi Centroid -->
+                        <div class="space-y-2">
+                            <label class="text-xs text-slate-300">Metode Inisialisasi Centroid:</label>
+                            <select id="select-init-mode" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <option value="random_point">Random Sampel Data</option>
+                                <option value="kmeans_plus">K-Means++ (Spasial Terjauh)</option>
+                                <option value="uniform">Acak Ruang Kanvas</option>
+                            </select>
+                        </div>
+
+                        <button onclick="resetCentroids()" class="w-full py-2.5 bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-800/60 text-xs font-bold rounded-xl text-indigo-300 transition-colors flex items-center justify-center space-x-2">
+                            <span>🔄 Inisialisasi Centroid Ulang</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- Right Column: Interactive Canvas & WCSS Chart (8 Cols) -->
+                <div class="lg:col-span-8 space-y-6">
+
+                    <!-- Panel Tombol Eksekusi Iterasi (Dipindahkan ke Atas Scatter Plot) -->
+                    <div class="glass-card rounded-2xl p-4 sm:p-5 space-y-3 border-t-2 border-t-indigo-500">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                                <span>⚡ 3. Kontrol Iterasi Algoritma</span>
+                            </h3>
+
+                            <!-- Kecepatan Play -->
+                            <div class="flex items-center space-x-2 text-xs text-slate-400">
+                                <span>Kecepatan Auto:</span>
+                                <div class="flex space-x-1">
+                                    <button onclick="setSpeed(1000)" id="speed-slow" class="px-2 py-1 bg-slate-800 text-slate-300 rounded hover:bg-slate-700">1x</button>
+                                    <button onclick="setSpeed(500)" id="speed-med" class="px-2 py-1 bg-indigo-600 text-white rounded">2x</button>
+                                    <button onclick="setSpeed(200)" id="speed-fast" class="px-2 py-1 bg-slate-800 text-slate-300 rounded hover:bg-slate-700">5x</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button id="btn-step" onclick="stepKMeans()" class="py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 transition-all text-xs uppercase tracking-wider flex items-center justify-center space-x-1">
+                                <span>Langkah (Step)</span>
+                                <span>➔</span>
+                            </button>
+                            <button id="btn-play" onclick="togglePlay()" class="py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 transition-all text-xs uppercase tracking-wider flex items-center justify-center space-x-1">
+                                <span id="play-text">Auto Play</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Interactive Scatter Plot -->
+                    <div class="glass-card rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                                <h3 class="text-sm font-bold text-slate-200">Scatter Plot 2D (Visualisasi Spasial)</h3>
+                            </div>
+                            <div class="flex items-center space-x-3 text-xs text-slate-400">
+                                <label class="flex items-center space-x-1 cursor-pointer">
+                                    <input type="checkbox" id="chk-trails" checked onchange="drawCanvas()" class="rounded bg-slate-800 border-slate-700 text-indigo-600">
+                                    <span>Jejak Centroid</span>
+                                </label>
+                                <label class="flex items-center space-x-1 cursor-pointer">
+                                    <input type="checkbox" id="chk-lines" checked onchange="drawCanvas()" class="rounded bg-slate-800 border-slate-700 text-indigo-600">
+                                    <span>Garis Penugasan</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Holder -->
+                        <div class="relative w-full aspect-[4/3] bg-slate-950/80 rounded-xl border border-slate-800 overflow-hidden cursor-crosshair">
+                            <canvas id="kmeansCanvas" class="w-full h-full block"></canvas>
+                        </div>
+
+                        <!-- Legend Items (Dynamic Colors) -->
+                        <div id="cluster-legend" class="flex flex-wrap gap-3 mt-4 pt-3 border-t border-slate-800 justify-center text-xs font-mono">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- WCSS (Inertia) Chart over Iterations -->
+                    <div class="glass-card rounded-2xl p-5">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Grafik Konvergensi Inersia / WCSS (Within-Cluster Sum of Squares)</h4>
+                            <span class="text-[10px] text-slate-400 font-mono">Makin rendah = Cluster makin rapat</span>
+                        </div>
+                        <div class="h-36 w-full">
+                            <canvas id="wcssChart"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+
+        <!-- ================= TAB 2: TEORI & EDULAB ================= -->
+        <section id="sec-theory" class="hidden space-y-8 animate-fadeIn">
+            
+            <!-- Hero banner -->
+            <div class="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 w-60 h-60 bg-indigo-600/10 rounded-full blur-3xl"></div>
+                <div class="max-w-3xl space-y-4">
+                    <span class="inline-block px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold border border-indigo-500/20">Machine Learning Unsupervised</span>
+                    <h2 class="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">Konsep & Cara Kerja K-Means Clustering</h2>
+                    <p class="text-slate-300 leading-relaxed text-sm sm:text-base">
+                        <strong class="text-indigo-400">K-Means</strong> adalah algoritma *Unsupervised Learning* berbasis jarak yang mengelompokkan sekumpulan data acak menjadi $K$ kelompok (cluster) tanpa membutuhkan label kategorikal sebelumnya.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Grid 2 Alur Utama K-Means -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Langkah A -->
+                <div class="glass-card rounded-2xl p-6 border-t-4 border-t-indigo-500 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold font-mono px-2.5 py-1 bg-indigo-500/20 text-indigo-300 rounded-full">Tahap 1</span>
+                        <span class="text-xl">📍</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-white">Tahap Penugasan (Assignment Step)</h3>
+                    <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        Setiap titik data $x_i$ dihitung jaraknya ke seluruh centroid $\mu_k$ ($k = 1, \dots, K$) menggunakan **Jarak Euclidean** 2-Dimensi:
+                    </p>
+                    <div class="p-3 bg-slate-900/90 rounded-xl font-mono text-xs text-center border border-slate-800 text-indigo-300">
+                        $$d(x_i, \mu_k) = \sqrt{(x_{i1} - \mu_{k1})^2 + (x_{i2} - \mu_{k2})^2}$$
+                    </div>
+                    <p class="text-xs text-slate-400">
+                        Titik data kemudian dimasukkan ke cluster dengan centroid yang memiliki nilai jarak $d$ terkecil.
+                    </p>
+                </div>
+
+                <!-- Langkah B -->
+                <div class="glass-card rounded-2xl p-6 border-t-4 border-t-purple-500 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold font-mono px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-full">Tahap 2</span>
+                        <span class="text-xl">🎯</span>
+                    </div>
+                    <h3 class="text-lg font-bold text-white">Tahap Pembaruan Centroid (Update Step)</h3>
+                    <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        Setelah seluruh titik memiliki cluster, lokasi tiap centroid $\mu_k$ diperbarui dengan menghitung nilai titik tengah/rata-rata (*mean*) dari anggotanya ($C_k$):
+                    </p>
+                    <div class="p-3 bg-slate-900/90 rounded-xl font-mono text-xs text-center border border-slate-800 text-purple-300">
+                        $$\mu_k = \frac{1}{|C_k|} \sum_{x_i \in C_k} x_i$$
+                    </div>
+                    <p class="text-xs text-slate-400">
+                        Proses berulang terus hingga posisi centroid tidak lagi berpindah secara signifikan ($\Delta \mu \approx 0$).
+                    </p>
+                </div>
+
+            </div>
+
+            <!-- Inersia / WCSS Explanation -->
+            <div class="glass-card rounded-2xl p-6 sm:p-8 space-y-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span>📊</span> Fungsi Kinerja Inersia / WCSS (Within-Cluster Sum of Squares)
+                </h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Tujuan algoritma K-Means adalah meminimalkan total kuadrat jarak antara setiap titik data dengan centroid kelompoknya sendiri:
+                </p>
+                <div class="p-4 bg-slate-900/90 rounded-xl font-mono text-xs sm:text-sm text-center border border-slate-800 text-amber-300">
+                    $$\text{WCSS} = \sum_{k=1}^{K} \sum_{x_i \in C_k} ||x_i - \mu_k||^2$$
+                </div>
+                <div class="bg-indigo-950/40 p-4 rounded-xl border border-indigo-800/30 text-xs sm:text-sm text-indigo-200 space-y-1">
+                    <p>💡 <strong>Garis Besar Evaluasi:</strong></p>
+                    <ul class="list-disc list-inside space-y-1 text-slate-300 text-xs">
+                        <li>Semakin kecil nilai WCSS, maka cluster semakin rapat dan homogen.</li>
+                        <li>Nilai $K$ yang terlalu besar (misal $K = N$) akan membuat WCSS menjadi 0, tetapi model menjadi tidak berguna (*overfitting*). Untuk menentukan $K$ optimal dalam praktiknya, statistikawan biasa menggunakan metode <strong>Elbow Method</strong>.</li>
+                    </ul>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/40 py-4 text-center text-xs text-slate-400">
+        <p>© 2026 K-Means Lab • Visualisator Pembelajaran Interaktif Machine Learning</p>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Palette Warna 5 Cluster Utama (Vibrant Neon)
+        const CLUSTER_COLORS = [
+            { bg: '#38bdf8', light: 'rgba(56, 189, 248, 0.4)', name: 'Cyan / Biru' },       // Cluster 0
+            { bg: '#f43f5e', light: 'rgba(244, 63, 94, 0.4)', name: 'Merah / Rose' },      // Cluster 1
+            { bg: '#f59e0b', light: 'rgba(245, 158, 11, 0.4)', name: 'Kuning / Amber' },    // Cluster 2
+            { bg: '#10b981', light: 'rgba(16, 185, 129, 0.4)', name: 'Hijau Emerald' },    // Cluster 3
+            { bg: '#a855f7', light: 'rgba(168, 85, 247, 0.4)', name: 'Ungu / Violet' }     // Cluster 4
+        ];
+
+        // Global State
+        let points = [];        // [{x, y, clusterId}]
+        let centroids = [];     // [{x, y, history: [{x,y}]}]
+        let trueK = 3;
+        let modelK = 3;
+        let numPoints = 120;
+        let spread = 30;
+
+        let iteration = 0;
+        let stepState = 'ASSIGN'; // 'ASSIGN' or 'UPDATE' or 'CONVERGED'
+        let playInterval = null;
+        let speedMs = 500;
+
+        let wcssHistory = [];
+
+        // Canvas & Chart Objects
+        let canvas, ctx;
+        let wcssChart = null;
+
+        // Sound Audio Effects
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTone(freq, duration = 0.1, type = 'sine') {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // Render Math KaTeX helper
+        function renderMath(element = document.body) {
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(element, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        }
+
+        // ================= INITIALIZATION & SETUP =================
+        window.onload = function() {
+            canvas = document.getElementById('kmeansCanvas');
+            ctx = canvas.getContext('2d');
+            
+            resizeCanvas();
+            window.addEventListener('resize', () => { resizeCanvas(); drawCanvas(); });
+
+            initWCSSChart();
+            setupControls();
+            
+            generateData();
+            renderMath();
+        };
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio || rect.width;
+            canvas.height = rect.height * window.devicePixelRatio || rect.height;
+            ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+        }
+
+        function setupControls() {
+            // Slider Listeners
+            document.getElementById('input-true-k').addEventListener('input', (e) => {
+                trueK = parseInt(e.target.value);
+                document.getElementById('val-true-k').innerText = `${trueK} Cluster`;
+                generateData();
+            });
+
+            document.getElementById('input-num-points').addEventListener('input', (e) => {
+                numPoints = parseInt(e.target.value);
+                document.getElementById('val-num-points').innerText = `${numPoints} Titik`;
+                generateData();
+            });
+
+            document.getElementById('input-spread').addEventListener('input', (e) => {
+                spread = parseInt(e.target.value);
+                let label = spread < 25 ? 'Rapat' : spread > 40 ? 'Sangat Menyebar' : 'Sedang';
+                document.getElementById('val-spread').innerText = label;
+                generateData();
+            });
+
+            document.getElementById('input-model-k').addEventListener('input', (e) => {
+                modelK = parseInt(e.target.value);
+                document.getElementById('val-model-k').innerText = `${modelK} Centroid`;
+                resetCentroids();
+            });
+
+            document.getElementById('select-init-mode').addEventListener('change', () => {
+                resetCentroids();
+            });
+        }
+
+        // ================= SYNTHETIC DATA GENERATOR =================
+        function generateData() {
+            pausePlay();
+            points = [];
+
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            const margin = 70;
+
+            // Generate True Centers for synthetic clusters
+            let trueCenters = [];
+            for (let k = 0; k < trueK; k++) {
+                let cx = margin + Math.random() * (width - margin * 2);
+                let cy = margin + Math.random() * (height - margin * 2);
+                trueCenters.push({ x: cx, y: cy });
+            }
+
+            // Distribute points around true centers
+            let pointsPerCluster = Math.floor(numPoints / trueK);
+            for (let k = 0; k < trueK; k++) {
+                let count = (k === trueK - 1) ? numPoints - (pointsPerCluster * (trueK - 1)) : pointsPerCluster;
+                for (let i = 0; i < count; i++) {
+                    let u = Math.random(), v = Math.random();
+                    let radius = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * spread;
+                    let angle = Math.random() * Math.PI * 2;
+
+                    let px = trueCenters[k].x + Math.cos(angle) * radius;
+                    let py = trueCenters[k].y + Math.sin(angle) * radius;
+
+                    // Keep inside bounds
+                    px = Math.max(20, Math.min(width - 20, px));
+                    py = Math.max(20, Math.min(height - 20, py));
+
+                    points.push({ x: px, y: py, clusterId: -1 });
+                }
+            }
+
+            resetCentroids();
+        }
+
+        // ================= CENTROID INITIALIZATION =================
+        function resetCentroids() {
+            pausePlay();
+            centroids = [];
+            iteration = 0;
+            stepState = 'ASSIGN';
+            wcssHistory = [];
+
+            // Reset points cluster assignment
+            points.forEach(p => p.clusterId = -1);
+
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+            const mode = document.getElementById('select-init-mode').value;
+
+            if (mode === 'random_point') {
+                // Pick random points from data
+                let shuffled = [...points].sort(() => 0.5 - Math.random());
+                for (let k = 0; k < modelK; k++) {
+                    let p = shuffled[k % shuffled.length];
+                    centroids.push({ x: p.x, y: p.y, history: [{ x: p.x, y: p.y }] });
+                }
+            } else if (mode === 'kmeans_plus') {
+                // K-Means++ Initialization
+                let first = points[Math.floor(Math.random() * points.length)];
+                centroids.push({ x: first.x, y: first.y, history: [{ x: first.x, y: first.y }] });
+
+                while (centroids.length < modelK) {
+                    let dists = points.map(p => {
+                        let minDist = Math.min(...centroids.map(c => Math.hypot(p.x - c.x, p.y - c.y)));
+                        return minDist * minDist;
+                    });
+
+                    let sumDist = dists.reduce((a, b) => a + b, 0);
+                    let randVal = Math.random() * sumDist;
+                    let accum = 0;
+                    let chosen = points[0];
+
+                    for (let i = 0; i < points.length; i++) {
+                        accum += dists[i];
+                        if (accum >= randVal) {
+                            chosen = points[i];
+                            break;
+                        }
+                    }
+                    centroids.push({ x: chosen.x, y: chosen.y, history: [{ x: chosen.x, y: chosen.y }] });
+                }
+            } else {
+                // Uniform Random Canvas
+                for (let k = 0; k < modelK; k++) {
+                    let cx = 50 + Math.random() * (width - 100);
+                    let cy = 50 + Math.random() * (height - 100);
+                    centroids.push({ x: cx, y: cy, history: [{ x: cx, y: cy }] });
+                }
+            }
+
+            updateLegend();
+            updateStatus("Langkah 0: Inisialisasi Centroid", "Centroid telah ditempatkan. Klik 'Langkah (Step)' untuk menugaskan titik ke centroid terdekat.");
+            resetWCSSChart();
+            drawCanvas();
+        }
+
+        // ================= K-MEANS CORE ALGORITHM STEPS =================
+        function stepKMeans() {
+            if (stepState === 'CONVERGED') {
+                playTone(880, 0.2);
+                return;
+            }
+
+            if (stepState === 'ASSIGN') {
+                // TAHAP 1: Assign Titik ke Centroid Terdekat
+                let changedCount = 0;
+
+                points.forEach(p => {
+                    let minDist = Infinity;
+                    let nearestCluster = -1;
+
+                    centroids.forEach((c, idx) => {
+                        let d = Math.hypot(p.x - c.x, p.y - c.y);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearestCluster = idx;
+                        }
+                    });
+
+                    if (p.clusterId !== nearestCluster) {
+                        changedCount++;
+                        p.clusterId = nearestCluster;
+                    }
+                });
+
+                let wcss = calculateWCSS();
+                wcssHistory.push(wcss);
+                updateWCSSChart();
+
+                iteration++;
+                playTone(400 + iteration * 40, 0.08);
+
+                stepState = 'UPDATE';
+                updateStatus(
+                    `Iterasi ${iteration}: Penugasan Cluster`,
+                    `Setiap titik dialokasikan ke centroid terdekat (Jarak Euclidean). ${changedCount} titik diperbarui.`
+                );
+
+            } else if (stepState === 'UPDATE') {
+                // TAHAP 2: Update Posisi Centroid ke Mean Koordinat Anggota
+                let maxShift = 0;
+
+                centroids.forEach((c, idx) => {
+                    let members = points.filter(p => p.clusterId === idx);
+                    if (members.length > 0) {
+                        let avgX = members.reduce((sum, m) => sum + m.x, 0) / members.length;
+                        let avgY = members.reduce((sum, m) => sum + m.y, 0) / members.length;
+
+                        let shift = Math.hypot(c.x - avgX, c.y - avgY);
+                        if (shift > maxShift) maxShift = shift;
+
+                        c.x = avgX;
+                        c.y = avgY;
+                        c.history.push({ x: avgX, y: avgY });
+                    }
+                });
+
+                playTone(600 + iteration * 40, 0.08);
+
+                // Cek Konvergensi (Jarak pergeseran < 0.5px)
+                if (maxShift < 0.5) {
+                    stepState = 'CONVERGED';
+                    pausePlay();
+                    updateStatus(
+                        `🎉 Konvergen pada Iterasi ${iteration}!`,
+                        `Posisi centroid sudah stabil dan tidak bergeser lagi. Algoritma selesai.`
+                    );
+                    confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+                    playTone(880, 0.3);
+                } else {
+                    stepState = 'ASSIGN';
+                    updateStatus(
+                        `Iterasi ${iteration}: Pembaruan Centroid`,
+                        `Posisi centroid digeser ke titik rata-rata (mean) anggotanya.`
+                    );
+                }
+            }
+
+            drawCanvas();
+        }
+
+        function calculateWCSS() {
+            let total = 0;
+            points.forEach(p => {
+                if (p.clusterId >= 0 && centroids[p.clusterId]) {
+                    let c = centroids[p.clusterId];
+                    let d = Math.hypot(p.x - c.x, p.y - c.y);
+                    total += d * d;
+                }
+            });
+            return total;
+        }
+
+        // ================= CANVAS RENDERING ENGINE =================
+        function drawCanvas() {
+            if (!ctx) return;
+
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            let showTrails = document.getElementById('chk-trails').checked;
+            let showLines = document.getElementById('chk-lines').checked;
+
+            // 1. Draw Lines connecting Points to assigned Centroids
+            if (showLines && stepState !== 'CONVERGED') {
+                points.forEach(p => {
+                    if (p.clusterId >= 0 && centroids[p.clusterId]) {
+                        let c = centroids[p.clusterId];
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(c.x, c.y);
+                        ctx.strokeStyle = CLUSTER_COLORS[p.clusterId % CLUSTER_COLORS.length].light;
+                        ctx.lineWidth = 0.8;
+                        ctx.stroke();
+                    }
+                });
+            }
+
+            // 2. Draw Centroid Trajectory Trails
+            if (showTrails) {
+                centroids.forEach((c, idx) => {
+                    if (c.history.length > 1) {
+                        ctx.beginPath();
+                        ctx.moveTo(c.history[0].x, c.history[0].y);
+                        for (let i = 1; i < c.history.length; i++) {
+                            ctx.lineTo(c.history[i].x, c.history[i].y);
+                        }
+                        ctx.strokeStyle = CLUSTER_COLORS[idx % CLUSTER_COLORS.length].bg;
+                        ctx.lineWidth = 2.5;
+                        ctx.setLineDash([4, 4]);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                });
+            }
+
+            // 3. Draw Data Points
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                if (p.clusterId >= 0) {
+                    ctx.fillStyle = CLUSTER_COLORS[p.clusterId % CLUSTER_COLORS.length].bg;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                } else {
+                    ctx.fillStyle = '#64748b'; // Neutral gray before first assignment
+                    ctx.strokeStyle = '#334155';
+                    ctx.lineWidth = 1;
+                }
+                ctx.fill();
+                ctx.stroke();
+            });
+
+            // 4. Draw Centroids (Distinct Glowing Stars)
+            centroids.forEach((c, idx) => {
+                let color = CLUSTER_COLORS[idx % CLUSTER_COLORS.length].bg;
+
+                // Outer Halo Glow
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
+                ctx.fillStyle = color + '33';
+                ctx.fill();
+
+                // Star Shape Icon
+                drawStar(ctx, c.x, c.y, 5, 12, 6, color, '#ffffff');
+            });
+        }
+
+        function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, fillStyle, strokeStyle) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx;
+            let y = cy;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius;
+                y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = cx + Math.cos(rot) * innerRadius;
+                y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = strokeStyle;
+            ctx.fillStyle = fillStyle;
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // ================= AUTO-PLAY CONTROLLER =================
+        function togglePlay() {
+            if (playInterval) {
+                pausePlay();
+            } else {
+                if (stepState === 'CONVERGED') resetCentroids();
+                playInterval = setInterval(() => {
+                    stepKMeans();
+                }, speedMs);
+                document.getElementById('play-text').innerText = 'Jeda (Pause)';
+                document.getElementById('btn-play').className = "py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg shadow-amber-500/25 transition-all text-xs uppercase tracking-wider flex items-center justify-center space-x-1";
+            }
+        }
+
+        function pausePlay() {
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+            document.getElementById('play-text').innerText = 'Auto Play';
+            document.getElementById('btn-play').className = "py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/25 transition-all text-xs uppercase tracking-wider flex items-center justify-center space-x-1";
+        }
+
+        function setSpeed(ms) {
+            speedMs = ms;
+            ['speed-slow', 'speed-med', 'speed-fast'].forEach(id => {
+                document.getElementById(id).className = "px-2 py-1 bg-slate-800 text-slate-300 rounded hover:bg-slate-700";
+            });
+            if (ms === 1000) document.getElementById('speed-slow').className = "px-2 py-1 bg-indigo-600 text-white rounded";
+            if (ms === 500) document.getElementById('speed-med').className = "px-2 py-1 bg-indigo-600 text-white rounded";
+            if (ms === 200) document.getElementById('speed-fast').className = "px-2 py-1 bg-indigo-600 text-white rounded";
+
+            if (playInterval) {
+                pausePlay();
+                togglePlay();
+            }
+        }
+
+        // ================= UI STATUS & LEGEND UPDATES =================
+        function updateStatus(title, desc) {
+            document.getElementById('status-badge').innerText = `Iterasi: ${iteration}`;
+            document.getElementById('status-title').innerText = title;
+            document.getElementById('status-desc').innerText = desc;
+
+            let currentWCSS = wcssHistory.length > 0 ? Math.round(wcssHistory[wcssHistory.length - 1]).toLocaleString() : '--';
+            document.getElementById('wcss-val').innerText = currentWCSS;
+        }
+
+        function updateLegend() {
+            let container = document.getElementById('cluster-legend');
+            container.innerHTML = '';
+
+            centroids.forEach((c, i) => {
+                let col = CLUSTER_COLORS[i % CLUSTER_COLORS.length];
+                let count = points.filter(p => p.clusterId === i).length;
+
+                let div = document.createElement('div');
+                div.className = "flex items-center space-x-1.5 px-2.5 py-1 bg-slate-900/80 rounded-lg border border-slate-800";
+                div.innerHTML = `
+                    <span class="w-3 h-3 rounded-full inline-block" style="background-color: ${col.bg}"></span>
+                    <span class="text-slate-300 font-bold">Cluster ${i + 1}:</span>
+                    <span class="text-slate-400">${count} data</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // ================= WCSS CHART (CHART.JS) =================
+        function initWCSSChart() {
+            const ctxChart = document.getElementById('wcssChart').getContext('2d');
+            wcssChart = new Chart(ctxChart, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'WCSS (Inersia)',
+                        data: [],
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#f59e0b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Langkah Penugasan', color: '#64748b', font: { size: 10 } },
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Inersia WCSS', color: '#64748b', font: { size: 10 } },
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function resetWCSSChart() {
+            if (!wcssChart) return;
+            wcssChart.data.labels = [];
+            wcssChart.data.datasets[0].data = [];
+            wcssChart.update();
+        }
+
+        function updateWCSSChart() {
+            if (!wcssChart) return;
+            wcssChart.data.labels = wcssHistory.map((_, i) => `Step ${i+1}`);
+            wcssChart.data.datasets[0].data = wcssHistory;
+            wcssChart.update();
+            updateLegend();
+        }
+
+        // ================= TAB SWITCHING =================
+        function switchTab(tabName) {
+            ['sim', 'theory'].forEach(t => {
+                document.getElementById(`sec-${t}`).classList.add('hidden');
+                let btn = document.getElementById(`tab-${t}`);
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+                btn.classList.add('text-slate-400');
+            });
+
+            document.getElementById(`sec-${tabName}`).classList.remove('hidden');
+            let activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-400');
+
+            if (tabName === 'sim') {
+                setTimeout(() => { resizeCanvas(); drawCanvas(); }, 50);
+            } else if (tabName === 'theory') {
+                renderMath(document.getElementById('sec-theory'));
+            }
+        }
+    </script>
+</body>
+</html>
